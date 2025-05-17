@@ -10,7 +10,6 @@
 \usepackage{booktabs}
 
 % --------------------------------------------------------------------
-% Title & Author Info (EDIT THESE)
 % --------------------------------------------------------------------
 \title{Lightweight Containerized LLM Serving with Ollama: A Feasibility Study for Edge and Hybrid Cloud Deployments}
 
@@ -23,13 +22,12 @@
 }
 
 % --------------------------------------------------------------------
-% Document Start
-% --------------------------------------------------------------------
+
 \begin{document}
 \maketitle
 
 \begin{abstract}
-% TODO: 150--200 word summary of the problem, method, results, and takeaway.
+
 Large-language-model (LLM) back-ends are typically hosted on long-lived GPU instances, limiting their use in cost-sensitive edge and hybrid-cloud scenarios. This paper investigates whether a single Docker image, built with the open-source Ollama runtime and a 3.8 B-parameter quantized model (phi-3), can deliver interactive responses on commodity CPU hardware. We benchmark the container on (i) a 32-core laptop and (ii) an AWS t3.medium VM, measuring cold-start latency, warm-path latency, memory footprint, and throughput under concurrent load. Results show that the container cold-starts in \(\approx\) 6 s, serves 64-token replies in \(\approx\) 3.7 s once warm, and consumes \(\approx\) 5 GB of RAM—well within the limits of 8 GB edge nodes. Throughput scales linearly up to four concurrent clients before CPU saturation, peaking at 0.4 req/s. A simple cost model indicates CPU-only serving is cheaper than a small GPU instance below \(\approx\) 11 requests per minute. These findings suggest that lightweight containerized LLMs are practical for bursty, privacy-sensitive workloads at the edge, while GPU infrastructure remains necessary for sustained high-throughput deployments.
 \end{abstract}
 
@@ -39,7 +37,7 @@ Large Language Models, Edge Computing, Containerization, Cloud Computing, Ollama
 
 % ================================
 \section{Introduction}\label{sec:intro}
-% Motivation, background, and paper contributions.
+
 The world of Large-Language Models (LLM) and AI has encountered a massive surge in recent years. Our understanding and Implementation of AI in general use has exploded, however, the underlying architecture has remained relatively unchanged. Most production stacks assume a long-running GPU instance in a hyperscale cloud. While this architecture suffices multi-billion dollar corporations that can afford to construct mega data centers, it is not something fees-able for a private user or smaller network edge workloads (factory floors, hospital devices, hotels, etc). This in turn will lead to dependence on these corporations, while completely co-opting the idea of open source ness, and privacy. In the context of small/private users keeping a GPU online solely to serve occasional queries can dominate operating cost, and is highly unfeesable.
 
 Recent advances make a different deployment strategy plausible.  
@@ -61,7 +59,7 @@ Specifically, I managed to gain measurements for the following:
 
 % ================================
 \section{Related Work}\label{sec:related}
-% Summarize prior art: vLLM, TGI, llamacpp, serverless GPU previews, etc.
+
 \subsubsection*{LLM inference servers}
 The mainstream approach to LLM serving is a persistent GPU backend that streams tokens over HTTP. While this is fine for majority of use cases, its not optimal for all cases (such as small businesses or systems confined to a very specific usage (hospitals, hotels etc.). Most modern Text Generation Interfaces (TGI's), work by offloading the users input query, thorugh an API, into a datacenter which typically utilizes Nvidia's A10G, or the more modern H100 series Graphics Cards. For reference the cost of a single H100 is \$25,000 (official price). While the costs of these GPU's are completely out of the question for small users in question, the second issue of them being ill-suited to bursty edge workloads where machines may be powered off between sessions, also exist.
 
@@ -75,7 +73,33 @@ Industry previews of GPU-backed serverless (AWS Lambda GPU, Google Cloud Run GPU
 Our study complements these efforts by quantifying cold- and warm-latency for a \emph{CPU-only} container and analysing the cost break-even versus the smallest GPU VM.
 % ================================
 \section{System Setup}\label{sec:setup}
-% Describe the Ollama container architecture, models chosen, hardware/VM specs.
+
+\subsubsection*{Hardware platforms}
+\textbf{Laptop.} 13th-Gen Intel\textsuperscript{\textregistered} Core\textsuperscript{TM} i9-13950HX,  
+24 cores / 32 threads, 32 GB RAM.
+
+\textbf{AWS t3.large.} 2 vCPU, 8 GB RAM, gp3 EBS (30 GB), Amazon Linux 2023, Docker 26.0.  
+(The smaller t3.medium killed the container once the 5 GB model
+resident set reached the cgroup limit.)
+\subsubsection*{Container image \& models}
+I used the official image \texttt{ollama/ollama:latest} (2.2 GB), which launches a
+REST endpoint on port \texttt{11434} and delegates token generation to a
+CPU fork of \texttt{llama.cpp}.  
+All weights are pulled at first run and cached under
+\texttt{/root/.ollama/models} inside the container layer.
+\subsubsection*{Benchmark harnessing}
+A small Bash script\footnote{Available at my GitHub for viewing
+\url{https://github.com/C00271692/CloudDataCentres}.}
+performs the following four measurements:
+
+\begin{enumerate}
+  \item \textbf{Cold-start latency} — \texttt{docker start} $\rightarrow$ first byte.
+  \item \textbf{Warm latency} — an additional \texttt{curl} once weights are in RAM.
+  \item \textbf{Throughput \& P95} — \texttt{hey} for 30 s at concurrency $\{1,4,8\}$.
+  \item \textbf{Memory footprint} — single-shot \texttt{docker stats}.
+\end{enumerate}
+
+The timestamps are then saved in a.csv file and a graph is plotted using a short Python Matplotlib script~\ref{sec:results}.
 
 \begin{figure}[t]
   \centering
@@ -86,11 +110,10 @@ Our study complements these efforts by quantifying cold- and warm-latency for a 
 
 % ================================
 \section{Experimental Methodology}\label{sec:method}
-% Benchmark design: cold vs. warm latency, throughput, memory usage.
 
 % ================================
 \section{Results}\label{sec:results}
-% Present findings.
+
 
 \begin{table}[t]
   \caption{Resource usage and latency for \texttt{phi3}}
@@ -111,21 +134,61 @@ Our study complements these efforts by quantifying cold- and warm-latency for a 
   \end{tabular}
 \end{table}
 
-% Example figure for latency plot
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{throughput_vs_c}
   \caption{Throughput as a function of concurrent clients.}
   \label{fig:throughput}
 \end{figure}
+\vspace{0.6em}
+\subsubsection*{AWS \texttt{t3.large} (8 GB RAM, 2 vCPU)}
+
+\begin{table}[t]
+  \caption{Resource usage and latency on AWS \texttt{t3.large}}
+  \label{tab:aws_metrics}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+      \textbf{Metric} & \textbf{Value} \\
+    \midrule
+      Docker image size   & 2.2\,GB \\
+      Model file size     & 1\,GB (quantised) \\
+      RAM after load      & 5.4\,GB \\
+      Cold-start latency  & 12.5\,s \\
+      Warm-path latency   & 23.0\,s \\
+      Throughput @ 8 conns & 0.40\,req/s \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{AWSlatency_cold_warm} 
+  \caption{Cold- vs. warm-path latency on AWS \texttt{t3.large}.}
+  \label{fig:aws_latency}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{AWSthroughput_vs_c}    
+  \caption{Throughput as a function of concurrency on AWS \texttt{t3.large}.}
+  \label{fig:aws_thr}
+\end{figure}
+
+\paragraph*{Observation}
+There are very clear differences between Cloud instance and our local execution of the experiment. There is significant differences in the cold/warm start values, where: \textbf{2× slower cold-start}
+(12.5 s vs.\ 6.4 s), due to weights being loaded from network-attached EBS, and a
+\textbf{6× slower warm-latency} (23 s vs.\ 3.4 s) due to its limited two vCPU budget. The throughput remain mainly similar (0.40 req/s), probably as a result of each request already residing on a core on both machines (Figs.~\ref{fig:throughput}
+and~\ref{fig:aws_thr}). These results clearly prove that CPU only remain viable for \emph{bursty} workloads. 
 
 % ================================
 \section{Discussion}\label{sec:discussion}
-% Interpret results, limitations, comparison to SaaS LLM endpoints.
+
 
 % ================================
 \section{Conclusion}\label{sec:conclusion}
-% Summarize contributions and suggest future work.
+
 
 % --------------------------------------------------------------------
 % References
