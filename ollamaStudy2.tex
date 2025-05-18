@@ -28,7 +28,7 @@
 
 \begin{abstract}
 
-Large-language-model (LLM) back-ends are typically hosted on long-lived GPU instances, limiting their use in cost-sensitive edge and hybrid-cloud scenarios. This paper investigates whether a single Docker image, built with the open-source Ollama runtime and a 3.8 B-parameter quantized model (phi-3), can deliver interactive responses on commodity CPU hardware. We benchmark the container on (i) a 32-core laptop and (ii) an AWS t3.medium VM, measuring cold-start latency, warm-path latency, memory footprint, and throughput under concurrent load. Results show that the container cold-starts in \(\approx\) 6 s, serves 64-token replies in \(\approx\) 3.7 s once warm, and consumes \(\approx\) 5 GB of RAM—well within the limits of 8 GB edge nodes. Throughput scales linearly up to four concurrent clients before CPU saturation, peaking at 0.4 req/s. A simple cost model indicates CPU-only serving is cheaper than a small GPU instance below \(\approx\) 11 requests per minute. These findings suggest that lightweight containerized LLMs are practical for bursty, privacy-sensitive workloads at the edge, while GPU infrastructure remains necessary for sustained high-throughput deployments.
+Large-language-model (LLM) back-ends are typically hosted on long-lived GPU instances, limiting their use in budget sensitive and hybrid-cloud scenarios. This paper investigates whether a single Docker image, built with the open-source Ollama runtime and a 3.8 B-parameter quantized model (phi-3), can deliver interactive responses on standard CPU hardware, with similar if not better results than fully on the Cloud. I benchmark the container on (i) a 32-core laptop and (ii) an AWS t3.medium VM, measuring cold-start latency, warm-path latency, memory footprint, and throughput under concurrent load. Results show that the container cold-starts in \(\approx\) 6 s, serves 64-token replies in \(\approx\) 3.7 s once warm, and consumes \(\approx\) 5 GB of RAM—well within the limits of 8 GB edge nodes. Throughput increases linearly up to four concurrent clients, peaking at 0.375 req/s. These findings show that lightweight containerized LLMs are practical for bursty, privacy-sensitive workloads at the edge, while GPU infrastructure is still necessary for higher workloads.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -38,7 +38,7 @@ Large Language Models, Edge Computing, Containerization, Cloud Computing, Ollama
 % ================================
 \section{Introduction}\label{sec:intro}
 
-The world of Large-Language Models (LLM) and AI has encountered a massive surge in recent years. Our understanding and Implementation of AI in general use has exploded, however, the underlying architecture has remained relatively unchanged. Most production stacks assume a long-running GPU instance in a hyperscale cloud. While this architecture suffices multi-billion dollar corporations that can afford to construct mega data centers, it is not something fees-able for a private user or smaller network edge workloads (factory floors, hospital devices, hotels, etc). This in turn will lead to dependence on these corporations, while completely co-opting the idea of open source ness, and privacy. In the context of small/private users keeping a GPU online solely to serve occasional queries can dominate operating cost, and is highly unfeesable.
+The world of Large-Language Models (LLM) and AI has encountered a massive surge in recent years. Our understanding and implementation of AI in general use has exploded, however, the underlying architecture has remained relatively unchanged. Most production stacks assume a long-running GPU instance in a hyperscale cloud. While this architecture suffices multi-billion dollar corporations that can afford to construct mega data centers, it is not something fees-able for a private user or smaller network edge workloads (factory floors, hospital devices, hotels, etc). This in turn will lead to dependence on these corporations, while completely co-opting the idea of open source ness, and privacy. In the context of small/private users keeping a GPU online solely to serve occasional queries can dominate operating cost, and is highly unfeesable.
 
 Recent advances make a different deployment strategy plausible.  
 First, lighter 3–8 B parameter models (e.g.\ \texttt{phi-3}\,\cite{phi3}) achieve impressive quality when quantised to 4-bit weights, shrinking disk size to \(\approx\)1 GB and RAM use to \(\approx\)5 GB.  
@@ -65,12 +65,12 @@ The mainstream approach to LLM serving is a persistent GPU backend that streams 
 
 \subsubsection*{CPU-only runtimes}
 \texttt{llama.cpp}~\cite{llamacpp} made an efficient CPU inference via int-4/ggml quantisation and AVX2/SVE intrinsics, enabling chat on laptops and even smartphones.
-Ollama builds on this engine but wraps it in a Docker image with a REST front-end, making the deployment path we study here a one-command experience. But why use CPU-only runtimes hwne they are obviusly less efficient than the beefy GPU's mentioned before? Well the cost is one thing, but utilizing CPU power may allow us to execute query's while on the go (like on mobile phones etc). This is a huge upstep, but while the CPU is the most crucial component in this case, its not the only component that allows a user to run an LLM algorithm natively on their device. RAM and accessing direct memory play a second in importance role, i would argue, to the processing unit. The time it takes to load up a model and supply it with a query is a very computationally heavy task and, as a result, time consuming. In this study i measure the cold start in comparison to a warm start, which is something traditional Data Cloud Centers don't really have to consider, as their GPU's are always in operation, and any breaks in their operations cost the datacenters millions in lost potential profits.
+Ollama builds on this engine but wraps it in a Docker image with a REST front-end, making the deployment path I studied here a one-command experience. But why use CPU-only runtimes when they are obviously less efficient than the beefy GPU's mentioned before? Well the cost is one thing, but utilizing CPU power may allow us to execute query's while on the go (like on mobile phones etc). This is a huge upstep, but while the CPU is the most crucial component in this case, its not the only component that allows a user to run an LLM algorithm natively on their device. RAM and accessing direct memory play a second in importance role, i would argue, to the processing unit. The time it takes to load up a model and supply it with a query is a very computationally heavy task and, as a result, time consuming. In this study I measure the cold start in comparison to a warm start, which is something traditional Data Cloud Centers don't really have to consider, as their GPU's are always in operation, and any breaks in their operations cost the datacenters millions in lost potential profits.
 
 \subsubsection*{Serverless and cost-aware ML}
 Prior work on serverless ML (e.g., PRETZEL~\cite{pretzel}) shows that cold-start overhead dominates for DNNs in Function-as-a-Service environments.
 Industry previews of GPU-backed serverless (AWS Lambda GPU, Google Cloud Run GPU) were announced in 2024~\cite{serverlessgpu}, but published evaluations are scarce.
-Our study complements these efforts by quantifying cold- and warm-latency for a \emph{CPU-only} container and analysing the cost break-even versus the smallest GPU VM.
+My study complements these efforts by quantifying cold- and warm-latency for a \emph{CPU-only} container and analyzing the cost break-even versus the smallest GPU VM.
 % ================================
 \section{System Setup}\label{sec:setup}
 
@@ -111,10 +111,37 @@ The timestamps are then saved in a.csv file and a graph is plotted using a short
 % ================================
 \section{Experimental Methodology}\label{sec:method}
 
+All measurements are automated in a simple bash script available on my GitHub (under the name \texttt{OllamaResults.sh})
+repository.\footnote{\url{https://github.com/C00271692/CloudDataCentres}}  
+Listing \ref{lst:snippet} provides:
+container, measure cold/warm latency, and sweep throughput.
+
+\begin{lstlisting}[language=bash,basicstyle=\footnotesize\ttfamily,
+                   caption={Key excerpt of \texttt{OllamaResults.sh}},
+                   label={lst:snippet}]
+docker run -d -p 11435:11434 ollama/ollama
+docker exec $(docker ps -q) ollama pull phi3      # pull model
+curl -w "warm_ms,%{time_total}\n" -o /dev/null \
+     -d '{"model":"phi3","prompt":"hi"}' \
+     http://localhost:11435/api/generate >> results.csv
+
+docker restart $(docker ps -q) && sleep 5
+curl -w "cold_ms,%{time_total}\n" -o /dev/null \
+     -d '{"model":"phi3","prompt":"hi"}' \
+     http://localhost:11435/api/generate >> results.csv
+
+for c in 1 4 8; do
+  hey -z 30s -c $c -d '{"model":"phi3","prompt":"test"}' \
+      http://localhost:11435/api/generate | \
+  awk -vC=$c '/Requests\/sec/{print"thr_c"C","$2}' >> results.csv
+done
+\end{lstlisting}
+
+more details on definitions, metric extraction, memory capture are
+explained in Section~\ref{sec:setup}.
+
 % ================================
 \section{Results}\label{sec:results}
-
-
 \begin{table}[t]
   \caption{Resource usage and latency for \texttt{phi3}}
   \label{tab:metrics}
@@ -177,18 +204,45 @@ The timestamps are then saved in a.csv file and a graph is plotted using a short
 \end{figure}
 
 \paragraph*{Observation}
-There are very clear differences between Cloud instance and our local execution of the experiment. There is significant differences in the cold/warm start values, where: \textbf{2× slower cold-start}
-(12.5 s vs.\ 6.4 s), due to weights being loaded from network-attached EBS, and a
-\textbf{6× slower warm-latency} (23 s vs.\ 3.4 s) due to its limited two vCPU budget. The throughput remain mainly similar (0.40 req/s), probably as a result of each request already residing on a core on both machines (Figs.~\ref{fig:throughput}
+There are very clear differences between Cloud instance and my local execution of the experiment. There are significant differences in the cold/warm start values, where: \textbf{2× slower cold-start}
+(12.5 s vs. 6.4 s), due to weights being loaded from network-attached EBS, and a
+\textbf{6× slower warm-latency} (23 s vs.\ 3.4 s) due to its limited two vCPU budget. The throughput remains mainly similar (0.40 req/s), probably as a result of each request already residing on a core on both machines (Figs.~\ref{fig:throughput}
 and~\ref{fig:aws_thr}). These results clearly prove that CPU only remain viable for \emph{bursty} workloads. 
 
 % ================================
 \section{Discussion}\label{sec:discussion}
+\subsubsection*{CPU‐only viability}
+These results show that a single command Ollama container can function on a standard CPU device (such as a laptop or smartphone), with 8GB of RAM. My 32-core laptop, yields the results of: {\bf 6.4 s} (cold) and {\bf 3.4 s} (warm); on AWS \texttt{t3.large} I yield {\bf 12.5 s} (cold) and {\bf 23 s} (warm). The RAM footprint of \(\approx\) 5 GB will definitely work with most modern setups (that have 8 GB of RAM available overall).
+
+\subsubsection*{Throughput bottlenecks}
+Figure \ref{fig:throughput} and Figure \ref{fig:aws_thr} show a near-linear
+line, suggesting that as the count of cores / threads increases, so does the processing power, and more requests can be handled at a time. There is no doubt, however, that if I were to keep adding cores indefinitely, I would eventually reach a point where the number of cores would start adding toil, and the overall processing capabilities would drop, however, on an 8 core setup, it seems to be perfect for my use case. 
+
+
+\subsubsection*{Cold vs.\ warm gap}
+The laptops lower cold start values is a direct result of disk I/O (1 GB weights), while the AWS gaps is double that of omy local instance, probably due to the model being read from network-attached EBS, that can be considerably slower.
+
+\subsubsection*{Cost break-even}
+the current prices for a \texttt{t3.large} costs
+\$0.083 h$^{-1}$ while the smallest NVIDIA A10G GPU instance
+(\texttt{g5.xlarge}) costs \$0.526 h$^{-1}$.  
+Given my peak of {\small0.375 req s$^{-1}$} on local CPU, and AWS reaches {\small0.4 req s$^{-1}$}
+
+\subsubsection*{Limitations}
+\begin{itemize}
+  \item \textbf{Different Models.}  Results were only collected for the 3.8 B-Parameter phi3 model. Using other models could yield different results
+  \item \textbf{CPU only.}  I did not utilize my built in GPU to collect further metrics.
+  \item \textbf{Short prompts.}  Using longer input query's would also increase input tokenization which would as a result reduce throughput proportionally.
+\end{itemize}
 
 
 % ================================
 \section{Conclusion}\label{sec:conclusion}
-
+This research asks a simple question: \emph{Can a single–command Docker image
+deliver a useful large-language-model experience on a standard laptop?} My findings would beg to argue in favor. A 4-bit \texttt{phi-3} model inside \textbf{Ollama} cold-starts in
+$\approx$6 s on a 32-core laptop and 12 s on an AWS \texttt{t3.large},
+then serves 64-token responses in 3–4 s (laptop) or 23 s (AWS) while
+occupying only 5 GB of RAM. These results clearly show that not only is running small LLM's locally on a containerized Docker image fee-sable, it even outperforms hosting said model on a cloud service in some cases. It is important to note however that this paper goes through the very basic findings and other crucial components, that would aid LLM models (such as GPU) haven't been taken into consideration. With a proper setup and an average laptop, I solemnly believe that small institutions/private users could utilize these single docker images to deliver a normal LLM experience.
 
 % --------------------------------------------------------------------
 % References
